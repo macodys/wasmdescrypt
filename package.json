@@ -1,0 +1,22 @@
+{
+  "name": "wasmdescrypt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node scripts/copy-vendor.mjs",
+    "start": "node server.mjs",
+    "static": "npx --yes serve -l 3000",
+    "stop": "powershell -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
+    "test:wasm": "node test-wasm.mjs",
+    "test:link": "node test-link-api.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "hls.js": "^1.5.17",
+    "libsodium-wrappers": "^0.8.4"
+  }
+}

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WASM Token Generator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <h1>WASM Token Generator</h1>
+        <p class="subtitle">
+          Generates the VidLink access token via WASM (<code>getAdv</code>) and
+          returns the stream URL (HLS or MP4).
+        </p>
+      </header>
+
+      <div id="status" class="status status--loading" role="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Initializing…</span>
+      </div>
+
+      <form id="token-form" class="form" hidden>
+        <fieldset class="type-fieldset">
+          <legend>Content type</legend>
+          <label class="radio">
+            <input type="radio" name="content-type" value="movie" checked />
+            Movie
+          </label>
+          <label class="radio">
+            <input type="radio" name="content-type" value="tv" />
+            TV series
+          </label>
+        </fieldset>
+
+        <label for="content-id">Content ID</label>
+        <div class="row">
+          <input
+            id="content-id"
+            name="content-id"
+            type="text"
+            inputmode="numeric"
+            placeholder="e.g. 786892 or 76479"
+            value="786892"
+            required
+          />
+          <select id="quality" name="quality" aria-label="Quality">
+            <option value="360">360p</option>
+            <option value="480">480p</option>
+            <option value="720">720p</option>
+            <option value="1080" selected>1080p</option>
+          </select>
+          <button type="submit" id="generate-btn">Generate</button>
+        </div>
+
+        <div id="tv-fields" class="tv-fields" hidden>
+          <div class="row tv-row">
+            <div class="field">
+              <label for="season">Season</label>
+              <input id="season" name="season" type="number" min="1" value="1" />
+            </div>
+            <div class="field">
+              <label for="episode">Episode</label>
+              <input id="episode" name="episode" type="number" min="1" value="1" />
+            </div>
+          </div>
+          <p class="hint">Matches VidLink URLs like <code>/tv/76479/1/1</code>. You can paste a full VidLink URL into the ID field.</p>
+        </div>
+
+        <label class="checkbox">
+          <input id="multi-lang" name="multi-lang" type="checkbox" />
+          Multi-language audio
+        </label>
+      </form>
+
+      <section id="output" class="output" hidden>
+        <div class="output-block">
+          <div class="output-header">
+            <h2>Stream URL <span id="stream-type" class="stream-type"></span></h2>
+            <button type="button" id="copy-playlist-btn" class="ghost">Copy</button>
+          </div>
+        <div id="url-warning" class="url-warning" hidden></div>
+        <pre id="playlist-value" class="token"></pre>
+        <div class="player-actions">
+          <button type="button" id="play-btn" class="ghost">Play in browser</button>
+          <button type="button" id="regenerate-play-btn" class="ghost" hidden>Regenerate &amp; play</button>
+          <button type="button" id="copy-master-btn" class="ghost" hidden>Copy quality link</button>
+        </div>
+        <div id="player-wrap" class="player-wrap" hidden>
+          <video id="preview-video" controls playsinline></video>
+          <p id="player-error" class="player-error" hidden></p>
+        </div>
+        </div>
+
+        <div class="output-block">
+          <div class="output-header">
+            <h2>Access token</h2>
+            <button type="button" id="copy-token-btn" class="ghost">Copy</button>
+          </div>
+          <pre id="token-value" class="token"></pre>
+        </div>
+
+        <div id="manual-stream" class="manual-stream" hidden>
+          <p class="hint">
+            No stream proxy detected. Open the VidLink API link below in a new tab, copy
+            <code>stream.playlist</code> (HLS) or a URL from <code>stream.qualities</code> (MP4),
+            then paste the JSON here.
+          </p>
+          <div class="output-header">
+            <h2>VidLink API link</h2>
+            <button type="button" id="copy-api-btn" class="ghost">Copy</button>
+          </div>
+          <pre id="api-url-value" class="token"></pre>
+          <label for="paste-json">Paste stream JSON</label>
+          <textarea id="paste-json" rows="6" placeholder='{"stream":{"type":"hls","playlist":"https://storm..."}}'></textarea>
+          <button type="button" id="apply-json-btn" class="ghost">Apply JSON</button>
+        </div>
+
+        <details class="details">
+          <summary id="source-details-summary">Source details</summary>
+          <pre id="master-playlist-value" class="hex"></pre>
+        </details>
+
+        <details class="details">
+          <summary>Raw token bytes (hex)</summary>
+          <pre id="token-hex" class="hex"></pre>
+        </details>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Serve over HTTP — <code>npm start</code> (UI + API) or <code>npm run static</code> (UI only).
+        </p>
+        <p>
+          Stream link API: <code>GET /api/link?id=786892</code> · TV:
+          <code>?id=76479&amp;type=tv&amp;season=1&amp;episode=1</code>
+        </p>
+      </footer>
+    </main>
+
+    <script src="wasm_exec.js"></script>
+    <script src="vendor/hls.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "libsodium": "./vendor/libsodium.mjs",
+          "libsodium-wrappers": "./vendor/libsodium-wrappers.mjs"
+        }
+      }
+    </script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

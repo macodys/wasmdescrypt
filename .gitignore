@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+hymlcomplete/
+
+# scraped / duplicate artifacts
+0008c2d2
+0093803e
+chunk223.js
