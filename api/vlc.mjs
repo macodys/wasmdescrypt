@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     }
 
     sendText(res, 200, playlist, {
-      "Content-Disposition": 'inline; filename="stream.m3u8"',
+      "Content-Disposition": 'attachment; filename="stream.m3u"',
       "Cache-Control": "no-cache",
     });
   } catch (error) {
