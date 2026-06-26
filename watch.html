@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stream Player</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .watch-card {
+        width: min(100%, 960px);
+      }
+
+      .watch-video-wrap {
+        margin-top: 1rem;
+        background: #000;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        aspect-ratio: 16 / 9;
+      }
+
+      #watch-video {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #000;
+      }
+
+      .watch-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      .watch-actions a,
+      .watch-actions button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: #1a2030;
+        color: var(--text);
+        border-radius: 999px;
+        padding: 0.55rem 1rem;
+        font: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .watch-actions a:hover,
+      .watch-actions button:hover {
+        border-color: var(--accent);
+        color: var(--accent-hover);
+      }
+
+      #watch-error {
+        margin-top: 1rem;
+        color: var(--error);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card watch-card">
+      <header>
+        <h1>Stream Player</h1>
+        <p class="subtitle">
+          Browser playback for VidLink streams. Open this page URL in any browser — no command line
+          required.
+        </p>
+      </header>
+
+      <div id="watch-status" class="status status--loading" role="status">
+        <span class="status-dot"></span>
+        <span id="watch-status-text">Loading stream…</span>
+      </div>
+
+      <div class="watch-video-wrap">
+        <video id="watch-video" controls playsinline></video>
+      </div>
+
+      <p id="watch-error" hidden></p>
+
+      <div class="watch-actions">
+        <a id="download-link" hidden download="stream.m3u">Download for VLC</a>
+        <a href="/">Back to generator</a>
+      </div>
+    </main>
+
+    <script src="vendor/hls.min.js"></script>
+    <script type="module" src="watch.js"></script>
+  </body>
+</html>

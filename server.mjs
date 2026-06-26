@@ -105,7 +105,7 @@ const server = http.createServer(async (req, res) => {
       const playlist = buildStormVlcM3u(upstream);
       res.writeHead(200, {
         "Content-Type": "application/vnd.apple.mpegurl; charset=utf-8",
-        "Content-Disposition": 'inline; filename="stream.m3u8"',
+        "Content-Disposition": 'attachment; filename="stream.m3u"',
         "Cache-Control": "no-cache",
         "Access-Control-Allow-Origin": "*",
       });

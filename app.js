@@ -1,3 +1,5 @@
+import { createStormHlsConfig, isStormUrl } from "./lib/storm-hls.mjs";
+
 const statusEl = document.getElementById("status");
 const statusText = document.getElementById("status-text");
 const formEl = document.getElementById("token-form");
@@ -46,34 +48,6 @@ function buildVidLinkApiUrl(token, multiLang, options) {
   }
 
   return `${VIDLINK_ORIGIN}/api/b/movie/${encodeURIComponent(token)}?multiLang=${multiLangParam}`;
-}
-
-function parseStormHeaders(url) {
-  try {
-    const headersParam = new URL(url).searchParams.get("headers");
-    if (!headersParam) {
-      return {};
-    }
-    return JSON.parse(headersParam);
-  } catch {
-    return {};
-  }
-}
-
-function createHlsConfig() {
-  return {
-    enableWorker: true,
-    lowLatencyMode: false,
-    xhrSetup(xhr, url) {
-      const storm = parseStormHeaders(url);
-      if (storm.referer) {
-        xhr.setRequestHeader("Referer", storm.referer);
-      }
-      if (storm.origin) {
-        xhr.setRequestHeader("Origin", storm.origin);
-      }
-    },
-  };
 }
 
 async function detectStreamBackend() {
@@ -319,8 +293,9 @@ function toProxiedMediaUrl(url) {
 
 function playHlsUrl(url) {
   const quality = qualitySelect.value;
-  const sourceUrl = hasStreamBackend ? toProxiedMediaUrl(url) : url;
-  hlsInstance = new Hls(hasStreamBackend ? { enableWorker: true, lowLatencyMode: false } : createHlsConfig());
+  const useProxy = hasStreamBackend && !isStormUrl(url);
+  const sourceUrl = useProxy ? toProxiedMediaUrl(url) : url;
+  hlsInstance = new Hls(useProxy ? { enableWorker: true, lowLatencyMode: false } : createStormHlsConfig());
 
   hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
     preferHlsQuality(hlsInstance, quality);
@@ -381,7 +356,7 @@ function playPreview() {
   }
 
   if (previewVideoEl.canPlayType("application/vnd.apple.mpegurl")) {
-    previewVideoEl.src = hasStreamBackend ? toProxiedMediaUrl(url) : url;
+    previewVideoEl.src = hasStreamBackend && !isStormUrl(url) ? toProxiedMediaUrl(url) : url;
     previewVideoEl.play().catch(showPlayerError);
     return;
   }
