@@ -1,8 +1,8 @@
 node_modules/
 .DS_Store
-hymlcomplete/
-
-# scraped / duplicate artifacts
+.probe-*.mjs
+_scan-*.mjs
+_vidcore*
 0008c2d2
 0093803e
 chunk223.js
