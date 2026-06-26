@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { handleLinkRequest } from "./lib/link-handler.mjs";
 import { fetchVidLinkStream } from "./lib/stream-core.mjs";
-import { proxyMediaRequest } from "./lib/media-proxy.mjs";
+import { proxyMediaRequest, buildStormVlcM3u, isStormHlsUrl } from "./lib/media-proxy.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -76,6 +76,40 @@ const server = http.createServer(async (req, res) => {
       const baseOrigin = `http://${req.headers.host}`;
       const body = await handleLinkRequest(url.searchParams, { baseOrigin });
       sendJson(res, 200, body);
+    } catch (error) {
+      sendJson(res, error.status || 502, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/vlc") {
+    try {
+      const baseOrigin = `http://${req.headers.host}`;
+      const params = new URLSearchParams(url.searchParams);
+      params.set("format", "hls");
+      params.set("source", "vidlink");
+      params.set("proxy", "0");
+      const body = await handleLinkRequest(params, { baseOrigin });
+
+      if (body.streamType !== "hls") {
+        sendJson(res, 404, { error: "No HLS stream available for this title." });
+        return;
+      }
+
+      const upstream = body.qualityUrl || body.url;
+      if (!isStormHlsUrl(upstream)) {
+        sendJson(res, 404, { error: "VLC playlist helper only supports Storm HLS links." });
+        return;
+      }
+
+      const playlist = buildStormVlcM3u(upstream);
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.apple.mpegurl; charset=utf-8",
+        "Content-Disposition": 'inline; filename="stream.m3u8"',
+        "Cache-Control": "no-cache",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(playlist);
     } catch (error) {
       sendJson(res, error.status || 502, { error: error.message });
     }
