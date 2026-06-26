@@ -26,7 +26,8 @@ export default async function handler(req, res) {
     const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
     const proto = req.headers["x-forwarded-proto"] || "https";
     const url = new URL(req.url, `${proto}://${host}`);
-    const body = await handleLinkRequest(url.searchParams);
+    const baseOrigin = `${proto}://${host}`;
+    const body = await handleLinkRequest(url.searchParams, { baseOrigin });
     sendJson(res, 200, body);
   } catch (error) {
     sendJson(res, error.status || 502, { error: error.message });
