@@ -11,8 +11,9 @@ async function testLink(label, path) {
   if (body.error) console.log("error:", body.error);
 }
 
-await testLink("Deadpool TMDB MP4-first", "/api/link?id=533535&format=auto");
-await testLink("Deadpool IMDb MP4-first", "/api/link?id=tt6263850&format=auto");
-await testLink("Proxied HLS", "/api/link?id=533535&format=hls&source=vidlink");
-await testLink("Proxied MP4", "/api/link?id=1439930&source=vidlink");
-await testLink("Raw upstream", "/api/link?id=1439930&source=vidlink&proxy=0");
+await testLink("VidLink auto", "/api/link?id=533535");
+await testLink("VidLink HLS", "/api/link?id=533535&format=hls");
+await testLink("VidLink MP4", "/api/link?id=1439930&format=mp4");
+await testLink("Proxied MP4", "/api/link?id=1439930");
+await testLink("Raw upstream", "/api/link?id=1439930&proxy=0");
+await testLink("Embed disabled", "/api/link?id=533535&source=embed");
