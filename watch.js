@@ -128,7 +128,25 @@ async function playHls(data, linkQuery, hlsUrl) {
   const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
   const manifestEdgeUrl = data.manifestEdgeUrl || `/api/manifest-edge?${linkQuery.toString()}`;
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(stormUrl)}`;
+  const originUrl = data.originUrl;
   const attempts = [];
+
+  async function tryOriginBypass() {
+    if (!originUrl) {
+      return false;
+    }
+    const result = await tryPlay("origin bypass", async () => {
+      // Even though originUrl is a different host, use stormUrl as base
+      // so createStormHlsConfig still injects Referer/Origin headers
+      await playHlsFromUrl(originUrl, stormUrl);
+    });
+    if (typeof result === "string") {
+      setStatus("ready", "Playing via origin bypass");
+      return true;
+    }
+    attempts.push(String(result.message || result));
+    return false;
+  }
 
   async function tryDirectPath() {
     const result = await tryPlay("direct", async () => {
@@ -176,6 +194,10 @@ async function playHls(data, linkQuery, hlsUrl) {
     }
     attempts.push(String(result.message || result));
     return false;
+  }
+
+  if (await tryOriginBypass()) {
+    return;
   }
 
   if (await tryDirectPath()) {
