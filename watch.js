@@ -136,6 +136,7 @@ async function tryPlay(label, fn) {
 async function playHls(data, linkQuery) {
   const stormUrl = pickHlsSourceUrl(data);
   const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
+  const manifestEdgeUrl = data.manifestEdgeUrl || `/api/manifest-edge?${linkQuery.toString()}`;
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(stormUrl)}`;
   const attempts = [];
 
@@ -148,6 +149,23 @@ async function playHls(data, linkQuery) {
       return true;
     }
     attempts.push(String(result.message || result));
+    return false;
+  }
+
+  async function tryEdgeManifest() {
+    const probe = await probeUrl(manifestEdgeUrl);
+    if (probe.isM3u8) {
+      const result = await tryPlay("edge manifest", async () => {
+        await playHlsFromUrl(manifestEdgeUrl);
+      });
+      if (typeof result === "string") {
+        setStatus("ready", "Playing HLS via edge manifest proxy");
+        return true;
+      }
+      attempts.push(String(result.message || result));
+    } else {
+      attempts.push(`edge manifest ${probe.status || "blocked"}`);
+    }
     return false;
   }
 
@@ -186,6 +204,10 @@ async function playHls(data, linkQuery) {
   }
 
   if (await tryDirectPath()) {
+    return;
+  }
+
+  if (await tryEdgeManifest()) {
     return;
   }
 
