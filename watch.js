@@ -163,12 +163,40 @@ async function tryPlay(label, fn) {
   }
 }
 
+async function playInlineManifest(data) {
+  if (!data.hlsManifest) {
+    return false;
+  }
+
+  try {
+    manifestBlobUrl = URL.createObjectURL(
+      new Blob([data.hlsManifest], { type: "application/vnd.apple.mpegurl" })
+    );
+    await playHlsFromUrl(manifestBlobUrl);
+    setStatus("ready", "Playing HLS via prefetched manifest");
+    return true;
+  } catch {
+    stopPlayback();
+    return false;
+  }
+}
+
 async function playHls(data, linkQuery) {
   const stormUrl = pickHlsSourceUrl(data);
   const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(stormUrl)}`;
   const attempts = [];
   const serverProxyFirst = Boolean(data.stormProxy?.active);
+
+  if (data.stormUpstream && !data.stormUpstream.ok) {
+    attempts.push(
+      `upstream ${data.stormUpstream.status || "error"} viaProxy=${data.stormUpstream.viaProxy}${data.stormUpstream.error ? ` (${data.stormUpstream.error})` : ""}`
+    );
+  }
+
+  if (await playInlineManifest(data)) {
+    return;
+  }
 
   async function tryServerProxyPaths() {
     const manifestProbe = await probeManifestUrl(manifestUrl);
