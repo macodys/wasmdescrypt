@@ -135,16 +135,17 @@ async function playHls(data, linkQuery, hlsUrl) {
     if (!originUrl) {
       return false;
     }
-    const result = await tryPlay("origin bypass", async () => {
-      // Even though originUrl is a different host, use stormUrl as base
-      // so createStormHlsConfig still injects Referer/Origin headers
-      await playHlsFromUrl(originUrl, stormUrl);
-    });
-    if (typeof result === "string") {
-      setStatus("ready", "Playing via origin bypass");
-      return true;
+    const originAttempts = [originUrl, data.originBypass?.strippedUrl].filter(Boolean);
+    for (const tryUrl of originAttempts) {
+      const result = await tryPlay(`origin ${tryUrl === originUrl ? "full" : "stripped"}`, async () => {
+        await playHlsFromUrl(tryUrl, stormUrl);
+      });
+      if (typeof result === "string") {
+        setStatus("ready", "Playing via origin bypass");
+        return true;
+      }
+      attempts.push(String(result.message || result));
     }
-    attempts.push(String(result.message || result));
     return false;
   }
 
