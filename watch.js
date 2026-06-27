@@ -11,7 +11,6 @@ const errorEl = document.getElementById("watch-error");
 const noteEl = document.getElementById("watch-note");
 const streamUrlEl = document.getElementById("stream-url");
 const downloadLink = document.getElementById("download-link");
-const livepushLink = document.getElementById("livepush-link");
 const copyUrlBtn = document.getElementById("copy-url-btn");
 const retryBtn = document.getElementById("retry-btn");
 
@@ -114,16 +113,6 @@ function playHlsFromUrl(sourceUrl, stormBaseUrl) {
   });
 }
 
-async function probeUrl(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  const text = response.ok ? await response.text() : "";
-  return {
-    ok: response.ok,
-    status: response.status,
-    isM3u8: response.ok && text.trimStart().startsWith("#EXTM3U"),
-  };
-}
-
 async function tryPlay(label, fn) {
   try {
     await fn();
@@ -134,7 +123,7 @@ async function tryPlay(label, fn) {
   }
 }
 
-async function playHls(data, linkQuery) {
+async function playHls(data, linkQuery, hlsUrl) {
   const stormUrl = pickHlsSourceUrl(data);
   const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
   const manifestEdgeUrl = data.manifestEdgeUrl || `/api/manifest-edge?${linkQuery.toString()}`;
@@ -143,10 +132,10 @@ async function playHls(data, linkQuery) {
 
   async function tryDirectPath() {
     const result = await tryPlay("direct", async () => {
-      await playHlsFromUrl(stormUrl, stormUrl);
+      await playHlsFromUrl(hlsUrl, hlsUrl);
     });
     if (typeof result === "string") {
-      setStatus("ready", "Playing extracted HLS via headers injection");
+      setStatus("ready", "Playing extracted HLS");
       return true;
     }
     attempts.push(String(result.message || result));
@@ -154,53 +143,38 @@ async function playHls(data, linkQuery) {
   }
 
   async function tryEdgeManifest() {
-    const probe = await probeUrl(manifestEdgeUrl);
-    if (probe.isM3u8) {
-      const result = await tryPlay("edge manifest", async () => {
-        await playHlsFromUrl(manifestEdgeUrl);
-      });
-      if (typeof result === "string") {
-        setStatus("ready", "Playing HLS via edge manifest proxy");
-        return true;
-      }
-      attempts.push(String(result.message || result));
-    } else {
-      attempts.push(`edge manifest ${probe.status || "blocked"}`);
+    const result = await tryPlay("edge manifest", async () => {
+      await playHlsFromUrl(manifestEdgeUrl);
+    });
+    if (typeof result === "string") {
+      setStatus("ready", "Playing HLS via edge proxy");
+      return true;
     }
+    attempts.push(String(result.message || result));
     return false;
   }
 
   async function tryServerManifest() {
-    const probe = await probeUrl(manifestUrl);
-    if (probe.isM3u8) {
-      const result = await tryPlay("manifest", async () => {
-        await playHlsFromUrl(manifestUrl);
-      });
-      if (typeof result === "string") {
-        setStatus("ready", "Playing HLS via manifest proxy");
-        return true;
-      }
-      attempts.push(String(result.message || result));
-    } else {
-      attempts.push(`manifest proxy ${probe.status || "blocked"}`);
+    const result = await tryPlay("manifest", async () => {
+      await playHlsFromUrl(manifestUrl);
+    });
+    if (typeof result === "string") {
+      setStatus("ready", "Playing HLS via server proxy");
+      return true;
     }
+    attempts.push(String(result.message || result));
     return false;
   }
 
   async function trySegmentProxy() {
-    const probe = await probeUrl(proxyUrl);
-    if (probe.isM3u8) {
-      const result = await tryPlay("segment proxy", async () => {
-        await playHlsFromUrl(proxyUrl);
-      });
-      if (typeof result === "string") {
-        setStatus("ready", "Playing HLS via segment proxy");
-        return true;
-      }
-      attempts.push(String(result.message || result));
-    } else {
-      attempts.push(`segment proxy ${probe.status || "blocked"}`);
+    const result = await tryPlay("segment proxy", async () => {
+      await playHlsFromUrl(proxyUrl);
+    });
+    if (typeof result === "string") {
+      setStatus("ready", "Playing HLS via segment proxy");
+      return true;
     }
+    attempts.push(String(result.message || result));
     return false;
   }
 
@@ -221,19 +195,18 @@ async function playHls(data, linkQuery) {
     }
   }
 
-  const livepushHint = `Or open via Livepush: https://livepush.io/hlsplayer/index.html?url=${encodeURIComponent(hlsUrl)}`;
   const proxyHint = (() => {
     if (!data.stormProxy?.configured) {
-      return "Storm blocks browser fetch (cannot set Referer). For HLS playback, set STORM_PROXY_URL on Vercel to a working residential proxy, or copy the m3u8 URL into FetchV/VLC.";
+      return "Storm blocks requests from our domain. Set STORM_PROXY_URL on Vercel for server-side proxy, or use VLC/FetchV with the m3u8 URL below.";
     }
     if (!data.stormProxy.active) {
-      return `STORM_PROXY_URL (${data.stormProxy.raw}) is unreachable. Update it with a real residential proxy address.`;
+      return `STORM_PROXY_URL (${data.stormProxy.raw}) is unreachable.`;
     }
-    return "STORM_PROXY_URL is set but proxy may be blocked. Use a residential proxy or try FetchV/VLC instead.";
+    return "STORM_PROXY_URL set but proxy rejected.";
   })();
 
   throw new Error(
-    `Could not load HLS (${attempts.join("; ")}). ${proxyHint} ${livepushHint}`
+    `Could not load HLS (${attempts.join("; ")}). ${proxyHint}`
   );
 }
 
@@ -281,10 +254,7 @@ async function start() {
   streamUrlEl.hidden = false;
   copyUrlBtn.hidden = false;
 
-  livepushLink.href = `https://livepush.io/hlsplayer/index.html?url=${encodeURIComponent(hlsUrl)}`;
-  livepushLink.hidden = false;
-
-  await playHls(data, linkQuery);
+  await playHls(data, linkQuery, hlsUrl);
 }
 
 copyUrlBtn.addEventListener("click", async () => {

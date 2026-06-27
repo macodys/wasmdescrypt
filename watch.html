@@ -85,9 +85,10 @@
       <header>
         <h1>Stream Player</h1>
         <p class="subtitle">
-          Plays the extracted Storm m3u8 directly (same as FetchV). If the server proxy is needed,
-          segments are fetched through our API — set <code>STORM_PROXY_URL</code> on Vercel if Storm
-          blocks datacenter IPs.
+          If playing in browser fails due to domain blocking, copy the m3u8 URL below
+          and paste it into <a href="https://livepush.io/hlsplayer/index.html" target="_blank" rel="noopener">livepush.io</a>,
+          <strong>FetchV</strong>, or <strong>VLC</strong>. For in-browser playback, set
+          <code>STORM_PROXY_URL</code> on Vercel to a residential proxy.
         </p>
       </header>
 
@@ -111,7 +112,6 @@
 
       <div class="watch-actions">
         <a id="download-link" hidden download="stream.m3u">Download .m3u for VLC</a>
-        <a id="livepush-link" hidden target="_blank" rel="noopener">Play on Livepush</a>
         <a href="/">Back to generator</a>
       </div>
     </main>
