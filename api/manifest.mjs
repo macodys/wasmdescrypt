@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     const rewritten = rewriteM3u8(text, upstream, proxyBase);
 
     sendText(res, 200, rewritten, {
-      "X-Storm-Proxy": getStormProxyStatus().active ? "active" : "direct",
+      "X-Storm-Proxy": (await getStormProxyStatus()).active ? "active" : "direct",
     });
   } catch (error) {
     sendText(res, error.status || 502, error.message || "Manifest request failed");

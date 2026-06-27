@@ -2,7 +2,6 @@ import {
   createStormHlsConfig,
   isStormUrl,
   pickHlsSourceUrl,
-  rewriteStormManifestForClient,
 } from "./lib/storm-hls.mjs";
 
 const statusEl = document.getElementById("watch-status");
@@ -16,7 +15,6 @@ const copyUrlBtn = document.getElementById("copy-url-btn");
 const retryBtn = document.getElementById("retry-btn");
 
 let hlsInstance = null;
-let manifestBlobUrl = null;
 
 function setStatus(kind, message) {
   statusEl.className = `status status--${kind}`;
@@ -64,11 +62,6 @@ function stopPlayback() {
   if (hlsInstance) {
     hlsInstance.destroy();
     hlsInstance = null;
-  }
-
-  if (manifestBlobUrl) {
-    URL.revokeObjectURL(manifestBlobUrl);
-    manifestBlobUrl = null;
   }
 
   videoEl.removeAttribute("src");
@@ -120,30 +113,7 @@ function playHlsFromUrl(sourceUrl, stormBaseUrl) {
   });
 }
 
-async function fetchStormManifestBlob(stormUrl) {
-  const response = await fetch(stormUrl, {
-    credentials: "omit",
-    referrerPolicy: "no-referrer",
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`manifest ${response.status}`);
-  }
-
-  const text = await response.text();
-  if (!text.trimStart().startsWith("#EXTM3U")) {
-    throw new Error("invalid manifest");
-  }
-
-  const rewritten = rewriteStormManifestForClient(text, stormUrl);
-  manifestBlobUrl = URL.createObjectURL(
-    new Blob([rewritten], { type: "application/vnd.apple.mpegurl" })
-  );
-  return manifestBlobUrl;
-}
-
-async function probeManifestUrl(url) {
+async function probeUrl(url) {
   const response = await fetch(url, { cache: "no-store" });
   const text = response.ok ? await response.text() : "";
   return {
@@ -163,119 +133,83 @@ async function tryPlay(label, fn) {
   }
 }
 
-async function playInlineManifest(data) {
-  if (!data.hlsManifest) {
-    return false;
-  }
-
-  try {
-    manifestBlobUrl = URL.createObjectURL(
-      new Blob([data.hlsManifest], { type: "application/vnd.apple.mpegurl" })
-    );
-    await playHlsFromUrl(manifestBlobUrl);
-    setStatus("ready", "Playing HLS via prefetched manifest");
-    return true;
-  } catch {
-    stopPlayback();
-    return false;
-  }
-}
-
 async function playHls(data, linkQuery) {
   const stormUrl = pickHlsSourceUrl(data);
   const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(stormUrl)}`;
   const attempts = [];
-  const serverProxyFirst = Boolean(data.stormProxy?.active);
 
-  if (data.stormUpstream && !data.stormUpstream.ok) {
-    attempts.push(
-      `upstream ${data.stormUpstream.status || "error"} viaProxy=${data.stormUpstream.viaProxy}${data.stormUpstream.error ? ` (${data.stormUpstream.error})` : ""}`
-    );
+  async function tryDirectPath() {
+    const result = await tryPlay("direct", async () => {
+      await playHlsFromUrl(stormUrl, stormUrl);
+    });
+    if (typeof result === "string") {
+      setStatus("ready", "Playing extracted HLS via headers injection");
+      return true;
+    }
+    attempts.push(String(result.message || result));
+    return false;
   }
 
-  if (await playInlineManifest(data)) {
-    return;
-  }
-
-  async function tryServerProxyPaths() {
-    const manifestProbe = await probeManifestUrl(manifestUrl);
-    if (manifestProbe.isM3u8) {
-      const manifest = await tryPlay("manifest", async () => {
+  async function tryServerManifest() {
+    const probe = await probeUrl(manifestUrl);
+    if (probe.isM3u8) {
+      const result = await tryPlay("manifest", async () => {
         await playHlsFromUrl(manifestUrl);
       });
-      if (typeof manifest === "string") {
+      if (typeof result === "string") {
         setStatus("ready", "Playing HLS via manifest proxy");
         return true;
       }
-      attempts.push(String(manifest.message || manifest));
+      attempts.push(String(result.message || result));
     } else {
-      attempts.push(`manifest ${manifestProbe.status || "blocked"}`);
+      attempts.push(`manifest proxy ${probe.status || "blocked"}`);
     }
+    return false;
+  }
 
-    const proxyProbe = await probeManifestUrl(proxyUrl);
-    if (proxyProbe.isM3u8) {
-      const proxied = await tryPlay("proxy", async () => {
+  async function trySegmentProxy() {
+    const probe = await probeUrl(proxyUrl);
+    if (probe.isM3u8) {
+      const result = await tryPlay("segment proxy", async () => {
         await playHlsFromUrl(proxyUrl);
       });
-      if (typeof proxied === "string") {
-        setStatus("ready", "Playing HLS via proxy");
+      if (typeof result === "string") {
+        setStatus("ready", "Playing HLS via segment proxy");
         return true;
       }
-      attempts.push(String(proxied.message || proxied));
+      attempts.push(String(result.message || result));
     } else {
-      attempts.push(`proxy manifest ${proxyProbe.status || "blocked"}`);
+      attempts.push(`segment proxy ${probe.status || "blocked"}`);
     }
-
     return false;
   }
 
-  async function tryClientPaths() {
-    const clientBlob = await tryPlay("client manifest", async () => {
-      const blobUrl = await fetchStormManifestBlob(stormUrl);
-      await playHlsFromUrl(blobUrl, stormUrl);
-    });
-    if (typeof clientBlob === "string") {
-      setStatus("ready", "Playing extracted HLS");
-      return true;
-    }
-    attempts.push(String(clientBlob.message || clientBlob));
-
-    const direct = await tryPlay("direct", async () => {
-      await playHlsFromUrl(stormUrl, stormUrl);
-    });
-    if (typeof direct === "string") {
-      setStatus("ready", "Playing extracted HLS");
-      return true;
-    }
-    attempts.push(String(direct.message || direct));
-    return false;
+  if (await tryDirectPath()) {
+    return;
   }
 
-  if (serverProxyFirst) {
-    if (await tryServerProxyPaths()) {
+  if (data.stormProxy?.active) {
+    if (await tryServerManifest()) {
       return;
     }
-    if (await tryClientPaths()) {
-      return;
-    }
-  } else {
-    if (await tryClientPaths()) {
-      return;
-    }
-    if (await tryServerProxyPaths()) {
+    if (await trySegmentProxy()) {
       return;
     }
   }
 
-  const proxyHint = data.stormProxy?.configured
-    ? data.stormProxy.active
-      ? "STORM_PROXY_URL is set but upstream still returned 403 — check proxy credentials or use a residential proxy."
-      : `STORM_PROXY_URL failed to initialize${data.stormProxy.error ? `: ${data.stormProxy.error}` : ""}.`
-    : "Set STORM_PROXY_URL on Vercel for server-side Storm access.";
+  const proxyHint = (() => {
+    if (!data.stormProxy?.configured) {
+      return "Storm blocks browser fetch (cannot set Referer). For HLS playback, set STORM_PROXY_URL on Vercel to a working residential proxy, or copy the m3u8 URL into FetchV/VLC.";
+    }
+    if (!data.stormProxy.active) {
+      return `STORM_PROXY_URL (${data.stormProxy.raw}) is unreachable. Update it with a real residential proxy address.`;
+    }
+    return "STORM_PROXY_URL is set but proxy may be blocked. Use a residential proxy or try FetchV/VLC instead.";
+  })();
 
   throw new Error(
-    `Could not load HLS (${attempts.join("; ")}). ${proxyHint} Use Retry for a fresh link, or copy the m3u8 URL into FetchV/VLC.`
+    `Could not load HLS (${attempts.join("; ")}). ${proxyHint}`
   );
 }
 
