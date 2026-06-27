@@ -295,7 +295,7 @@ function playHlsUrl(url) {
   const quality = qualitySelect.value;
   const useProxy = hasStreamBackend && !isStormUrl(url);
   const sourceUrl = useProxy ? toProxiedMediaUrl(url) : url;
-  hlsInstance = new Hls(useProxy ? { enableWorker: true, lowLatencyMode: false } : createStormHlsConfig());
+    hlsInstance = new Hls(useProxy ? { enableWorker: true, lowLatencyMode: false } : createStormHlsConfig(url));
 
   hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
     preferHlsQuality(hlsInstance, quality);

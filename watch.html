@@ -19,20 +19,15 @@
         aspect-ratio: 16 / 9;
       }
 
-      #watch-video,
-      #watch-iframe {
+      #watch-video {
         width: 100%;
         height: 100%;
         display: block;
         background: #000;
-        border: 0;
       }
 
-      #watch-iframe {
-        display: none;
-      }
-
-      .watch-actions {
+      .watch-actions,
+      .stream-panel {
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
@@ -40,7 +35,8 @@
       }
 
       .watch-actions a,
-      .watch-actions button {
+      .watch-actions button,
+      .stream-panel button {
         appearance: none;
         border: 1px solid var(--border);
         background: #1a2030;
@@ -53,9 +49,22 @@
       }
 
       .watch-actions a:hover,
-      .watch-actions button:hover {
+      .watch-actions button:hover,
+      .stream-panel button:hover {
         border-color: var(--accent);
         color: var(--accent-hover);
+      }
+
+      #stream-url {
+        flex: 1 1 100%;
+        min-height: 5rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: #0f1320;
+        color: var(--text);
+        padding: 0.75rem;
+        font: 0.85rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        resize: vertical;
       }
 
       #watch-error {
@@ -76,8 +85,8 @@
       <header>
         <h1>Stream Player</h1>
         <p class="subtitle">
-          Browser playback for VidLink streams. Storm HLS uses the VidLink player when direct
-          playback is blocked.
+          Plays the extracted VidLink Storm m3u8 from our API. The URL below is what plugins like
+          FetchV should consume.
         </p>
       </header>
 
@@ -88,21 +97,18 @@
 
       <div class="watch-video-wrap">
         <video id="watch-video" controls playsinline></video>
-        <iframe
-          id="watch-iframe"
-          title="VidLink player"
-          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-          allowfullscreen
-          referrerpolicy="no-referrer-when-downgrade"
-        ></iframe>
+      </div>
+
+      <div class="stream-panel">
+        <textarea id="stream-url" hidden readonly aria-label="Extracted m3u8 URL"></textarea>
+        <button id="copy-url-btn" type="button" hidden>Copy m3u8 URL</button>
       </div>
 
       <p id="watch-error" hidden></p>
       <p id="watch-note" class="watch-note" hidden></p>
 
       <div class="watch-actions">
-        <a id="download-link" hidden download="stream.m3u">Download for VLC</a>
-        <a id="embed-link" hidden target="_blank" rel="noopener">Open on VidLink</a>
+        <a id="download-link" hidden download="stream.m3u">Download .m3u for VLC</a>
         <a href="/">Back to generator</a>
       </div>
     </main>
