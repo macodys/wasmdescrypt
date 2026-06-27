@@ -1,5 +1,5 @@
 import { handleLinkRequest } from "../lib/link-handler.mjs";
-import { buildUpstreamHeaders, fetchUpstream, isStormHlsUrl, rewriteM3u8 } from "../lib/media-proxy.mjs";
+import { buildUpstreamHeaders, fetchUpstream, getStormProxyStatus, isStormHlsUrl, rewriteM3u8 } from "../lib/media-proxy.mjs";
 import { pickHlsSourceUrl } from "../lib/storm-hls.mjs";
 
 function sendText(res, status, body, headers = {}) {
@@ -65,7 +65,9 @@ export default async function handler(req, res) {
     const proxyBase = `${baseOrigin}/api/proxy?url=`;
     const rewritten = rewriteM3u8(text, upstream, proxyBase);
 
-    sendText(res, 200, rewritten);
+    sendText(res, 200, rewritten, {
+      "X-Storm-Proxy": getStormProxyStatus().active ? "active" : "direct",
+    });
   } catch (error) {
     sendText(res, error.status || 502, error.message || "Manifest request failed");
   }

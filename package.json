@@ -17,6 +17,7 @@
   "type": "commonjs",
   "dependencies": {
     "hls.js": "^1.5.17",
-    "libsodium-wrappers": "^0.8.4"
+    "libsodium-wrappers": "^0.8.4",
+    "undici": "^8.5.0"
   }
 }

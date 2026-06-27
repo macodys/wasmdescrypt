@@ -168,56 +168,86 @@ async function playHls(data, linkQuery) {
   const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(stormUrl)}`;
   const attempts = [];
+  const serverProxyFirst = Boolean(data.stormProxy?.active);
 
-  const clientBlob = await tryPlay("client manifest", async () => {
-    const blobUrl = await fetchStormManifestBlob(stormUrl);
-    await playHlsFromUrl(blobUrl, stormUrl);
-  });
-  if (typeof clientBlob === "string") {
-    setStatus("ready", "Playing extracted HLS");
-    return;
+  async function tryServerProxyPaths() {
+    const manifestProbe = await probeManifestUrl(manifestUrl);
+    if (manifestProbe.isM3u8) {
+      const manifest = await tryPlay("manifest", async () => {
+        await playHlsFromUrl(manifestUrl);
+      });
+      if (typeof manifest === "string") {
+        setStatus("ready", "Playing HLS via manifest proxy");
+        return true;
+      }
+      attempts.push(String(manifest.message || manifest));
+    } else {
+      attempts.push(`manifest ${manifestProbe.status || "blocked"}`);
+    }
+
+    const proxyProbe = await probeManifestUrl(proxyUrl);
+    if (proxyProbe.isM3u8) {
+      const proxied = await tryPlay("proxy", async () => {
+        await playHlsFromUrl(proxyUrl);
+      });
+      if (typeof proxied === "string") {
+        setStatus("ready", "Playing HLS via proxy");
+        return true;
+      }
+      attempts.push(String(proxied.message || proxied));
+    } else {
+      attempts.push(`proxy manifest ${proxyProbe.status || "blocked"}`);
+    }
+
+    return false;
   }
-  attempts.push(String(clientBlob.message || clientBlob));
 
-  const direct = await tryPlay("direct", async () => {
-    await playHlsFromUrl(stormUrl, stormUrl);
-  });
-  if (typeof direct === "string") {
-    setStatus("ready", "Playing extracted HLS");
-    return;
-  }
-  attempts.push(String(direct.message || direct));
-
-  const proxyProbe = await probeManifestUrl(proxyUrl);
-  if (proxyProbe.isM3u8) {
-    const proxied = await tryPlay("proxy", async () => {
-      await playHlsFromUrl(proxyUrl);
+  async function tryClientPaths() {
+    const clientBlob = await tryPlay("client manifest", async () => {
+      const blobUrl = await fetchStormManifestBlob(stormUrl);
+      await playHlsFromUrl(blobUrl, stormUrl);
     });
-    if (typeof proxied === "string") {
-      setStatus("ready", "Playing HLS via proxy");
+    if (typeof clientBlob === "string") {
+      setStatus("ready", "Playing extracted HLS");
+      return true;
+    }
+    attempts.push(String(clientBlob.message || clientBlob));
+
+    const direct = await tryPlay("direct", async () => {
+      await playHlsFromUrl(stormUrl, stormUrl);
+    });
+    if (typeof direct === "string") {
+      setStatus("ready", "Playing extracted HLS");
+      return true;
+    }
+    attempts.push(String(direct.message || direct));
+    return false;
+  }
+
+  if (serverProxyFirst) {
+    if (await tryServerProxyPaths()) {
       return;
     }
-    attempts.push(String(proxied.message || proxied));
-  } else {
-    attempts.push(`proxy manifest ${proxyProbe.status || "blocked"}`);
-  }
-
-  const manifestProbe = await probeManifestUrl(manifestUrl);
-  if (manifestProbe.isM3u8) {
-    const manifest = await tryPlay("manifest", async () => {
-      await playHlsFromUrl(manifestUrl);
-    });
-    if (typeof manifest === "string") {
-      setStatus("ready", "Playing HLS via manifest proxy");
+    if (await tryClientPaths()) {
       return;
     }
-    attempts.push(String(manifest.message || manifest));
   } else {
-    attempts.push(`manifest ${manifestProbe.status || "blocked"}`);
+    if (await tryClientPaths()) {
+      return;
+    }
+    if (await tryServerProxyPaths()) {
+      return;
+    }
   }
+
+  const proxyHint = data.stormProxy?.configured
+    ? data.stormProxy.active
+      ? "STORM_PROXY_URL is set but upstream still returned 403 — check proxy credentials or use a residential proxy."
+      : `STORM_PROXY_URL failed to initialize${data.stormProxy.error ? `: ${data.stormProxy.error}` : ""}.`
+    : "Set STORM_PROXY_URL on Vercel for server-side Storm access.";
 
   throw new Error(
-    `Could not load HLS (${attempts.join("; ")}). Storm blocks this browser or server IP. Set STORM_PROXY_URL on Vercel, use Retry for a fresh link, or copy the m3u8 URL into FetchV/VLC.`
+    `Could not load HLS (${attempts.join("; ")}). ${proxyHint} Use Retry for a fresh link, or copy the m3u8 URL into FetchV/VLC.`
   );
 }
 
