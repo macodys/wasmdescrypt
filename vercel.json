@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "rewrites": [
+    { "source": "/watch", "destination": "/watch.html" }
+  ],
   "functions": {
     "api/link.mjs": {
       "includeFiles": "{fu.wasm,wasm_exec.js,lib/**,vendor/**,node_modules/libsodium-wrappers/**,node_modules/libsodium/**}"
