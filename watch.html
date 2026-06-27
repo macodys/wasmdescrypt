@@ -85,8 +85,9 @@
       <header>
         <h1>Stream Player</h1>
         <p class="subtitle">
-          Plays the extracted VidLink Storm m3u8 from our API. The URL below is what plugins like
-          FetchV should consume.
+          Plays the extracted Storm m3u8 directly (same as FetchV). If the server proxy is needed,
+          segments are fetched through our API — set <code>STORM_PROXY_URL</code> on Vercel if Storm
+          blocks datacenter IPs.
         </p>
       </header>
 
@@ -102,6 +103,7 @@
       <div class="stream-panel">
         <textarea id="stream-url" hidden readonly aria-label="Extracted m3u8 URL"></textarea>
         <button id="copy-url-btn" type="button" hidden>Copy m3u8 URL</button>
+        <button id="retry-btn" type="button" hidden>Retry with fresh link</button>
       </div>
 
       <p id="watch-error" hidden></p>

@@ -4,7 +4,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { handleLinkRequest } from "./lib/link-handler.mjs";
 import { fetchVidLinkStream } from "./lib/stream-core.mjs";
-import { proxyMediaRequest, buildStormVlcM3u, isStormHlsUrl } from "./lib/media-proxy.mjs";
+import {
+  proxyMediaRequest,
+  buildStormVlcM3u,
+  isStormHlsUrl,
+  buildUpstreamHeaders,
+  fetchUpstream,
+  rewriteM3u8,
+} from "./lib/media-proxy.mjs";
+import { pickHlsSourceUrl } from "./lib/storm-hls.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -96,8 +104,8 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const upstream = body.qualityUrl || body.url;
-      if (!isStormHlsUrl(upstream)) {
+      const upstream = pickHlsSourceUrl(body);
+      if (!upstream || !isStormHlsUrl(upstream)) {
         sendJson(res, 404, { error: "VLC playlist helper only supports Storm HLS links." });
         return;
       }
@@ -110,6 +118,55 @@ const server = http.createServer(async (req, res) => {
         "Access-Control-Allow-Origin": "*",
       });
       res.end(playlist);
+    } catch (error) {
+      sendJson(res, error.status || 502, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/manifest") {
+    try {
+      const baseOrigin = `http://${req.headers.host}`;
+      const params = new URLSearchParams(url.searchParams);
+      params.set("source", "vidlink");
+      params.set("format", "hls");
+      params.set("proxy", "0");
+      const body = await handleLinkRequest(params, { baseOrigin });
+
+      if (body.streamType !== "hls") {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("No HLS stream available for this title.");
+        return;
+      }
+
+      const upstream = pickHlsSourceUrl(body);
+      if (!upstream || !isStormHlsUrl(upstream)) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Manifest helper only supports Storm HLS links.");
+        return;
+      }
+
+      const upstreamHeaders = buildUpstreamHeaders(upstream);
+      const response = await fetchUpstream(upstream, { headers: upstreamHeaders });
+
+      if (!response.ok) {
+        res.writeHead(response.status, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end(
+          `Upstream manifest error (${response.status}). Storm blocked the server fetch — use downloadUrl for VLC or embedUrl in browser.`
+        );
+        return;
+      }
+
+      const text = await response.text();
+      const proxyBase = `${baseOrigin}/api/proxy?url=`;
+      const rewritten = rewriteM3u8(text, upstream, proxyBase);
+
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.apple.mpegurl; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(rewritten);
     } catch (error) {
       sendJson(res, error.status || 502, { error: error.message });
     }

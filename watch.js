@@ -1,4 +1,4 @@
-import { createStormHlsConfig, pickHlsSourceUrl } from "./lib/storm-hls.mjs";
+import { createStormHlsConfig, isStormUrl, pickHlsSourceUrl } from "./lib/storm-hls.mjs";
 
 const statusEl = document.getElementById("watch-status");
 const statusText = document.getElementById("watch-status-text");
@@ -8,6 +8,7 @@ const noteEl = document.getElementById("watch-note");
 const streamUrlEl = document.getElementById("stream-url");
 const downloadLink = document.getElementById("download-link");
 const copyUrlBtn = document.getElementById("copy-url-btn");
+const retryBtn = document.getElementById("retry-btn");
 
 let hlsInstance = null;
 
@@ -19,6 +20,7 @@ function setStatus(kind, message) {
 function showError(message, note = "") {
   errorEl.hidden = false;
   errorEl.textContent = message;
+  retryBtn.hidden = false;
   if (note) {
     noteEl.hidden = false;
     noteEl.textContent = note;
@@ -67,21 +69,7 @@ function playMp4(url) {
   return videoEl.play();
 }
 
-async function probeManifest(url) {
-  const response = await fetch(url, { method: "GET" });
-  const contentType = response.headers.get("content-type") || "";
-  const text = response.ok ? await response.text() : "";
-  return {
-    ok: response.ok,
-    looksLikeManifest:
-      response.ok &&
-      (contentType.includes("mpegurl") ||
-        contentType.includes("m3u8") ||
-        text.trimStart().startsWith("#EXTM3U")),
-  };
-}
-
-function playHlsFromUrl(sourceUrl, basePlaylistUrl) {
+function playHlsFromUrl(sourceUrl, stormBaseUrl) {
   return new Promise((resolve, reject) => {
     if (!window.Hls) {
       reject(new Error("HLS player failed to load."));
@@ -98,53 +86,78 @@ function playHlsFromUrl(sourceUrl, basePlaylistUrl) {
       return;
     }
 
-    hlsInstance = new Hls(createStormHlsConfig(basePlaylistUrl));
+    const config =
+      stormBaseUrl && isStormUrl(stormBaseUrl)
+        ? createStormHlsConfig(stormBaseUrl)
+        : { enableWorker: true, lowLatencyMode: false };
+
+    hlsInstance = new Hls(config);
+
     hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, () => {
       videoEl.play().then(resolve).catch(reject);
     });
+
     hlsInstance.on(window.Hls.Events.ERROR, (_event, data) => {
       if (!data.fatal) {
         return;
       }
       reject(new Error(data.details || data.type || "HLS error"));
     });
+
     hlsInstance.loadSource(sourceUrl);
     hlsInstance.attachMedia(videoEl);
   });
 }
 
-async function playHls(upstream) {
-  const proxyUrl = `/api/proxy?url=${encodeURIComponent(upstream)}`;
+async function playHls(data, linkQuery) {
+  const stormUrl = pickHlsSourceUrl(data);
+  const manifestUrl = data.manifestUrl || `/api/manifest?${linkQuery.toString()}`;
+
+  let directError = null;
 
   try {
-    const proxied = await probeManifest(proxyUrl);
-    if (proxied.looksLikeManifest) {
-      await playHlsFromUrl(proxyUrl, upstream);
-      setStatus("ready", "Playing HLS via proxy");
-      return;
-    }
-  } catch {
-    // try direct
+    await playHlsFromUrl(stormUrl, stormUrl);
+    setStatus("ready", "Playing extracted HLS");
+    return;
+  } catch (error) {
+    directError = error;
+    stopPlayback();
   }
 
-  await playHlsFromUrl(upstream, upstream);
-  setStatus("ready", "Playing extracted HLS");
+  try {
+    await playHlsFromUrl(manifestUrl);
+    setStatus("ready", "Playing HLS via proxy");
+    return;
+  } catch (proxyError) {
+    const detail = proxyError.message || "proxy failed";
+    const directDetail = directError?.message || "direct failed";
+    throw new Error(
+      `Could not load HLS (direct: ${directDetail}; proxy: ${detail}). Storm links expire — try Retry. For offline players use the m3u8 URL with FetchV or download the .m3u for VLC.`
+    );
+  }
+}
+
+async function fetchLink(linkQuery) {
+  const response = await fetch(`/api/link?${linkQuery.toString()}&_=${Date.now()}`);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || `API error (${response.status})`);
+  }
+  return data;
 }
 
 async function start() {
   const linkQuery = buildLinkQuery(new URLSearchParams(window.location.search));
-  const response = await fetch(`/api/link?${linkQuery.toString()}`);
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || `API error (${response.status})`);
-  }
 
   stopPlayback();
   errorEl.hidden = true;
   errorEl.textContent = "";
   noteEl.hidden = true;
   noteEl.textContent = "";
+  retryBtn.hidden = true;
+  setStatus("loading", "Loading stream…");
+
+  const data = await fetchLink(linkQuery);
 
   if (data.downloadUrl) {
     downloadLink.href = data.downloadUrl;
@@ -168,11 +181,7 @@ async function start() {
   streamUrlEl.hidden = false;
   copyUrlBtn.hidden = false;
 
-  noteEl.hidden = false;
-  noteEl.textContent =
-    "This player uses the extracted Storm m3u8 from /api/link. Extensions like FetchV can also read this URL from the field below. Referer: https://megacloud.live/";
-
-  await playHls(hlsUrl);
+  await playHls(data, linkQuery);
 }
 
 copyUrlBtn.addEventListener("click", async () => {
@@ -183,9 +192,12 @@ copyUrlBtn.addEventListener("click", async () => {
   }, 1500);
 });
 
+retryBtn.addEventListener("click", () => {
+  start().catch((error) => {
+    showError(error.message);
+  });
+});
+
 start().catch((error) => {
-  showError(
-    error.message,
-    "Browser playback may be blocked by Storm CORS. Copy the m3u8 URL below for FetchV/IINA/VLC, or download the .m3u playlist."
-  );
+  showError(error.message);
 });

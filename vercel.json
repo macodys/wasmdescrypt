@@ -12,6 +12,9 @@
     },
     "api/vlc.mjs": {
       "includeFiles": "{fu.wasm,wasm_exec.js,lib/**,vendor/**,node_modules/libsodium-wrappers/**,node_modules/libsodium/**}"
+    },
+    "api/manifest.mjs": {
+      "includeFiles": "{fu.wasm,wasm_exec.js,lib/**,vendor/**,node_modules/libsodium-wrappers/**,node_modules/libsodium/**}"
     }
   }
 }
