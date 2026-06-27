@@ -11,6 +11,7 @@ const errorEl = document.getElementById("watch-error");
 const noteEl = document.getElementById("watch-note");
 const streamUrlEl = document.getElementById("stream-url");
 const downloadLink = document.getElementById("download-link");
+const livepushLink = document.getElementById("livepush-link");
 const copyUrlBtn = document.getElementById("copy-url-btn");
 const retryBtn = document.getElementById("retry-btn");
 
@@ -220,6 +221,7 @@ async function playHls(data, linkQuery) {
     }
   }
 
+  const livepushHint = `Or open via Livepush: https://livepush.io/hlsplayer/index.html?url=${encodeURIComponent(hlsUrl)}`;
   const proxyHint = (() => {
     if (!data.stormProxy?.configured) {
       return "Storm blocks browser fetch (cannot set Referer). For HLS playback, set STORM_PROXY_URL on Vercel to a working residential proxy, or copy the m3u8 URL into FetchV/VLC.";
@@ -231,7 +233,7 @@ async function playHls(data, linkQuery) {
   })();
 
   throw new Error(
-    `Could not load HLS (${attempts.join("; ")}). ${proxyHint}`
+    `Could not load HLS (${attempts.join("; ")}). ${proxyHint} ${livepushHint}`
   );
 }
 
@@ -278,6 +280,9 @@ async function start() {
   streamUrlEl.value = hlsUrl;
   streamUrlEl.hidden = false;
   copyUrlBtn.hidden = false;
+
+  livepushLink.href = `https://livepush.io/hlsplayer/index.html?url=${encodeURIComponent(hlsUrl)}`;
+  livepushLink.hidden = false;
 
   await playHls(data, linkQuery);
 }
